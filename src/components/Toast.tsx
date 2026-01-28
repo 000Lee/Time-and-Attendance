@@ -45,7 +45,7 @@ export const Toast: React.FC<ToastProps> = ({
           <X className="w-4 h-4" strokeWidth={1.5} />
         </ToastPrimitive.Close>
       </ToastPrimitive.Root>
-      <ToastPrimitive.Viewport className="fixed bottom-0 right-0 p-6 flex flex-col gap-2 w-full max-w-sm z-50" />
+      <ToastPrimitive.Viewport className="fixed bottom-0 right-0 p-6 flex flex-col gap-2 w-full max-w-sm z-[9999]" />
     </ToastPrimitive.Provider>
   );
 };

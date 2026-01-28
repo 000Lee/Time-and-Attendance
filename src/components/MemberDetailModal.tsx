@@ -1,6 +1,4 @@
 import React, { useState } from 'react';
-import { format } from 'date-fns';
-import { ko } from 'date-fns/locale';
 import { Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -10,123 +8,20 @@ import { useApp } from '../context/AppContext';
 import { Member } from '../types';
 import { AddLeaveModal } from './AddLeaveModal';
 import { Toast } from './Toast';
+import {
+  getCurrentLeavePeriod,
+  getLeavePeriodByOffset,
+  calculateTotalLeave,
+  calculateUsedLeave,
+  formatPeriod,
+  LeavePeriod,
+} from '../utils/leaveCalculator';
 
 interface MemberDetailModalProps {
   member: Member;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-interface LeaveItemProps {
-  leave: any;
-  onDelete: (id: string) => void;
-}
-
-const LeaveItem: React.FC<LeaveItemProps> = ({ leave, onDelete }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedDate, setEditedDate] = useState(leave.date);
-  const [editedType, setEditedType] = useState(leave.type);
-  const { group, setGroup } = useApp();
-
-  const handleSave = () => {
-    if (!group) return;
-
-    const updatedLeaves = group.leaves.map(l =>
-      l.id === leave.id
-        ? { ...l, date: editedDate, type: editedType }
-        : l
-    );
-
-    setGroup({
-      ...group,
-      leaves: updatedLeaves,
-    });
-
-    setIsEditing(false);
-  };
-
-  const handleCancel = () => {
-    setEditedDate(leave.date);
-    setEditedType(leave.type);
-    setIsEditing(false);
-  };
-
-  if (isEditing) {
-    return (
-      <div className="bg-secondary rounded-md p-3 space-y-3">
-        <div className="flex items-center gap-3">
-          <Input
-            type="date"
-            value={editedDate}
-            onChange={(e) => setEditedDate(e.target.value)}
-            className="h-9 flex-1"
-          />
-          <select
-            value={editedType}
-            onChange={(e) => setEditedType(e.target.value)}
-            className="h-9 px-3 rounded-md border border-input bg-card text-foreground text-body-sm"
-          >
-            <option value="full">연차</option>
-            <option value="am">AM</option>
-            <option value="pm">PM</option>
-          </select>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            onClick={handleSave}
-            size="sm"
-            className="h-8 bg-primary text-primary-foreground font-normal hover:bg-primary-hover"
-          >
-            저장
-          </Button>
-          <Button
-            onClick={handleCancel}
-            variant="ghost"
-            size="sm"
-            className="h-8 bg-transparent text-secondary-foreground font-normal hover:bg-secondary-hover hover:text-secondary-foreground"
-          >
-            취소
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-center justify-between bg-secondary rounded-md p-3">
-      <div className="flex items-center gap-3">
-        <span className="text-body text-secondary-foreground">{leave.date}</span>
-        <span
-          className={`text-caption px-2 py-1 rounded ${
-            leave.type === 'full'
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-accent text-accent-foreground'
-          }`}
-        >
-          {leave.type === 'full' ? '연차' : leave.type === 'am' ? 'AM' : 'PM'}
-        </span>
-      </div>
-      <div className="flex items-center gap-2">
-        <Button
-          onClick={() => setIsEditing(true)}
-          variant="ghost"
-          size="sm"
-          className="bg-transparent text-secondary-foreground font-normal hover:bg-secondary-hover hover:text-secondary-foreground"
-        >
-          수정
-        </Button>
-        <Button
-          onClick={() => onDelete(leave.id)}
-          variant="ghost"
-          size="sm"
-          className="bg-transparent text-error font-normal hover:bg-error/10 hover:text-error"
-        >
-          <Trash2 className="w-4 h-4" strokeWidth={1.5} />
-        </Button>
-      </div>
-    </div>
-  );
-};
 
 export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
   member,
@@ -135,38 +30,63 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedJoinDate, setEditedJoinDate] = useState(member.joinDate);
+  const [periodOffset, setPeriodOffset] = useState(0);
   const [showAddLeaveModal, setShowAddLeaveModal] = useState(false);
   const [toast, setToast] = useState<{ open: boolean; title: string; variant: 'success' | 'error' }>({
     open: false,
     title: '',
     variant: 'success',
   });
-  const { updateMember, deleteMember, getMemberLeaves, deleteLeave, group, setGroup } = useApp();
+  const { updateMember, deleteMember, getMemberLeaves, deleteLeave } = useApp();
 
-  const memberLeaves = getMemberLeaves(member.id);
+  // 현재 보고 있는 연차 주기
+  const currentPeriod = getLeavePeriodByOffset(member.joinDate, periodOffset);
+  const totalLeave = calculateTotalLeave(member.joinDate, currentPeriod.year);
+  
+  // 해당 주기의 연차만 필터링
+  const allLeaves = getMemberLeaves(member.id);
+  const periodLeaves = allLeaves.filter(leave => {
+    const leaveDate = new Date(leave.date);
+    return leaveDate >= currentPeriod.startDate && leaveDate <= currentPeriod.endDate;
+  });
+  const usedLeave = calculateUsedLeave(allLeaves, currentPeriod);
+  const remainingLeave = totalLeave - usedLeave;
 
-  const handleSaveEdit = () => {
+  const handlePrevPeriod = () => {
+    if (currentPeriod.year > 1) {
+      setPeriodOffset(periodOffset - 1);
+    }
+  };
+
+  const handleNextPeriod = () => {
+    const nextPeriod = getLeavePeriodByOffset(member.joinDate, periodOffset + 1);
+    if (nextPeriod.startDate <= new Date()) {
+      setPeriodOffset(periodOffset + 1);
+    }
+  };
+
+  const handleSaveEdit = async () => {
     if (!editedJoinDate) {
       setToast({ open: true, title: '입사일을 입력해주세요', variant: 'error' });
       return;
     }
 
-    updateMember(member.id, { joinDate: editedJoinDate });
+    await updateMember(member.id, { joinDate: editedJoinDate });
     setIsEditing(false);
     setToast({ open: true, title: '정보가 수정되었습니다', variant: 'success' });
   };
 
-  const handleDeleteMember = () => {
+  const handleDeleteMember = async () => {
     if (window.confirm(`${member.name} 멤버를 삭제하시겠습니까?`)) {
-      deleteMember(member.id);
+      await deleteMember(member.id);
       setToast({ open: true, title: '멤버가 삭제되었습니다', variant: 'success' });
       setTimeout(() => onOpenChange(false), 500);
     }
   };
 
-  const handleDeleteLeave = (leaveId: string) => {
+  const handleDeleteLeave = async (leaveId: string) => {
     if (window.confirm('이 연차를 삭제하시겠습니까?')) {
-      deleteLeave(leaveId);
+      await deleteLeave(leaveId);
       setToast({ open: true, title: '연차가 삭제되었습니다', variant: 'success' });
     }
   };
@@ -180,6 +100,7 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
           </DialogHeader>
 
           <div className="space-y-6 py-4">
+            {/* 입사일 섹션 */}
             <div className="flex items-center justify-between bg-secondary rounded-lg p-4">
               {isEditing ? (
                 <div className="flex-1 flex items-center gap-3">
@@ -229,23 +150,29 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
               )}
             </div>
 
+            {/* 연차 주기 섹션 */}
             <div className="bg-tertiary rounded-lg p-4">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-h4 font-sans text-tertiary-foreground">연차 주기</h3>
+                <h3 className="text-h4 font-sans text-tertiary-foreground">
+                  {currentPeriod.year}년차
+                </h3>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="bg-transparent text-tertiary-foreground font-normal hover:bg-gray-200 hover:text-tertiary-foreground"
+                    onClick={handlePrevPeriod}
+                    disabled={currentPeriod.year <= 1}
+                    className="bg-transparent text-tertiary-foreground font-normal hover:bg-gray-200 hover:text-tertiary-foreground disabled:opacity-50"
                   >
                     <ChevronLeft className="w-4 h-4" strokeWidth={1.5} />
                   </Button>
-                  <span className="text-body text-tertiary-foreground">
-                    {format(new Date(), 'yyyy년', { locale: ko })}
+                  <span className="text-body-sm text-tertiary-foreground min-w-[180px] text-center">
+                    {formatPeriod(currentPeriod)}
                   </span>
                   <Button
                     variant="ghost"
                     size="sm"
+                    onClick={handleNextPeriod}
                     className="bg-transparent text-tertiary-foreground font-normal hover:bg-gray-200 hover:text-tertiary-foreground"
                   >
                     <ChevronRight className="w-4 h-4" strokeWidth={1.5} />
@@ -256,38 +183,62 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
               <div className="grid grid-cols-3 gap-4">
                 <div className="bg-card rounded-md p-4 text-center border border-border">
                   <p className="text-caption text-muted-foreground mb-1">총 연차</p>
-                  <p className="text-h3 font-sans text-foreground">{member.totalLeave}</p>
+                  <p className="text-h3 font-sans text-foreground">{totalLeave}</p>
                 </div>
                 <div className="bg-card rounded-md p-4 text-center border border-border">
                   <p className="text-caption text-muted-foreground mb-1">사용</p>
-                  <p className="text-h3 font-sans text-foreground">{member.usedLeave}</p>
+                  <p className="text-h3 font-sans text-foreground">{usedLeave}</p>
                 </div>
                 <div className="bg-card rounded-md p-4 text-center border border-border">
                   <p className="text-caption text-muted-foreground mb-1">남음</p>
-                  <p className="text-h3 font-sans text-primary">{member.totalLeave - member.usedLeave}</p>
+                  <p className="text-h3 font-sans text-primary">{remainingLeave}</p>
                 </div>
               </div>
             </div>
 
+            {/* 사용 내역 섹션 */}
             <div>
               <h3 className="text-h4 font-sans text-foreground mb-3">사용 내역</h3>
-              {memberLeaves.length === 0 ? (
+              {periodLeaves.length === 0 ? (
                 <p className="text-body-sm text-muted-foreground text-center py-8">
-                  아직 사용한 연차가 없습니다
+                  이 주기에 사용한 연차가 없습니다
                 </p>
               ) : (
                 <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {memberLeaves.map((leave) => (
-                    <LeaveItem
+                  {[...periodLeaves].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((leave) => (
+                    <div
                       key={leave.id}
-                      leave={leave}
-                      onDelete={handleDeleteLeave}
-                    />
+                      className="flex items-center justify-between bg-secondary rounded-md p-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-body text-secondary-foreground">{leave.date}</span>
+                        <span
+                          className={`text-caption px-2 py-1 rounded ${
+                            leave.type === 'full'
+                              ? 'bg-primary text-primary-foreground'
+                              : leave.type === 'am'
+                              ? 'bg-amber-400 text-amber-900'
+                              : 'bg-violet-300 text-violet-800'
+                          }`}
+                        >
+                          {leave.type === 'full' ? '연차' : leave.type === 'am' ? '오전' : '오후'}
+                        </span>
+                      </div>
+                      <Button
+                        onClick={() => handleDeleteLeave(leave.id)}
+                        variant="ghost"
+                        size="sm"
+                        className="bg-transparent text-error font-normal hover:bg-error/10 hover:text-error"
+                      >
+                        <Trash2 className="w-4 h-4" strokeWidth={1.5} />
+                      </Button>
+                    </div>
                   ))}
                 </div>
               )}
             </div>
 
+            {/* 버튼 섹션 */}
             <div className="flex gap-3 pt-4">
               <Button
                 onClick={() => setShowAddLeaveModal(true)}

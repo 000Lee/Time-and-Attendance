@@ -6,65 +6,57 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useApp } from '../context/AppContext';
-import { Group } from '../types';
 import { Toast } from '../components/Toast';
 
 export const Login: React.FC = () => {
   const [groupCode, setGroupCode] = useState('');
   const [showNewGroupModal, setShowNewGroupModal] = useState(false);
   const [newGroupCode, setNewGroupCode] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState<{ open: boolean; title: string; variant: 'success' | 'error' }>({
     open: false,
     title: '',
     variant: 'success',
   });
-  const { setGroup } = useApp();
+  const { loginWithCode, createGroup } = useApp();
   const navigate = useNavigate();
 
-  const generateGroupCode = () => {
-    return `GROUP-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
-  };
-
-  const handleJoinGroup = () => {
+  const handleJoinGroup = async () => {
     if (!groupCode.trim()) {
       setToast({ open: true, title: '그룹 코드를 입력해주세요', variant: 'error' });
       return;
     }
 
-    const storedGroups = localStorage.getItem('allGroups');
-    const groups: Record<string, Group> = storedGroups ? JSON.parse(storedGroups) : {};
+    setIsLoading(true);
+    const success = await loginWithCode(groupCode.trim());
+    setIsLoading(false);
 
-    if (groups[groupCode]) {
-      setGroup(groups[groupCode]);
+    if (success) {
       navigate('/home');
     } else {
       setToast({ open: true, title: '존재하지 않는 그룹 코드입니다', variant: 'error' });
     }
   };
 
-  const handleCreateGroup = () => {
-    const code = generateGroupCode();
-    const newGroup: Group = {
-      code,
-      members: [],
-      leaves: [],
-    };
+  const handleCreateGroup = async () => {
+    setIsLoading(true);
+    const code = await createGroup();
+    setIsLoading(false);
 
-    const storedGroups = localStorage.getItem('allGroups');
-    const groups: Record<string, Group> = storedGroups ? JSON.parse(storedGroups) : {};
-    groups[code] = newGroup;
-    localStorage.setItem('allGroups', JSON.stringify(groups));
-
-    setNewGroupCode(code);
-    setShowNewGroupModal(true);
+    if (code) {
+      setNewGroupCode(code);
+      setShowNewGroupModal(true);
+    } else {
+      setToast({ open: true, title: '그룹 생성에 실패했습니다', variant: 'error' });
+    }
   };
 
-  const handleProceedToGroup = () => {
-    const storedGroups = localStorage.getItem('allGroups');
-    const groups: Record<string, Group> = storedGroups ? JSON.parse(storedGroups) : {};
-    
-    if (groups[newGroupCode]) {
-      setGroup(groups[newGroupCode]);
+  const handleProceedToGroup = async () => {
+    setIsLoading(true);
+    const success = await loginWithCode(newGroupCode);
+    setIsLoading(false);
+
+    if (success) {
       setShowNewGroupModal(false);
       navigate('/home');
     }
@@ -97,14 +89,16 @@ export const Login: React.FC = () => {
                 onChange={(e) => setGroupCode(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleJoinGroup()}
                 className="h-11"
+                disabled={isLoading}
               />
             </div>
 
             <Button
               onClick={handleJoinGroup}
+              disabled={isLoading}
               className="w-full h-11 bg-primary text-primary-foreground font-normal hover:bg-primary-hover"
             >
-              입장하기
+              {isLoading ? '접속 중...' : '입장하기'}
             </Button>
 
             <div className="relative">
@@ -118,10 +112,11 @@ export const Login: React.FC = () => {
 
             <Button
               onClick={handleCreateGroup}
+              disabled={isLoading}
               variant="ghost"
               className="w-full h-11 bg-transparent text-foreground font-normal hover:bg-secondary hover:text-secondary-foreground"
             >
-              새 그룹 만들기
+              {isLoading ? '생성 중...' : '새 그룹 만들기'}
             </Button>
           </div>
         </div>
@@ -142,9 +137,10 @@ export const Login: React.FC = () => {
             </div>
             <Button
               onClick={handleProceedToGroup}
+              disabled={isLoading}
               className="w-full h-11 bg-primary text-primary-foreground font-normal hover:bg-primary-hover"
             >
-              시작하기
+              {isLoading ? '접속 중...' : '시작하기'}
             </Button>
           </div>
         </DialogContent>

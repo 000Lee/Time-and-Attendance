@@ -6,6 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Navbar } from '../components/Navbar';
 import { useApp } from '../context/AppContext';
 
+interface DayLeave {
+  memberId: string;
+  memberName: string;
+  type: string;
+}
+
 export const Home: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const { group } = useApp();
@@ -18,9 +24,9 @@ export const Home: React.FC = () => {
   const emptyDays = Array(startDayOfWeek).fill(null);
 
   const leavesMap = useMemo(() => {
-    if (!group) return new Map();
-    
-    const map = new Map<string, Array<{ memberId: string; memberName: string; type: string }>>();
+    if (!group) return new Map<string, DayLeave[]>();
+
+    const map = new Map<string, DayLeave[]>();
     
     group.leaves.forEach(leave => {
       const member = group.members.find(m => m.id === leave.memberId);
@@ -115,9 +121,11 @@ export const Home: React.FC = () => {
                         className={`text-caption px-2 py-1 rounded truncate ${
                           leave.type === 'full'
                             ? 'bg-primary text-primary-foreground'
-                            : 'bg-accent text-accent-foreground'
+                            : leave.type === 'am'
+                            ? 'bg-amber-400 text-amber-900'
+                            : 'bg-violet-300 text-violet-800'
                         }`}
-                        title={`${leave.memberName} - ${leave.type === 'full' ? '연차' : leave.type === 'am' ? 'AM' : 'PM'}`}
+                        title={`${leave.memberName} - ${leave.type === 'full' ? '연차' : leave.type === 'am' ? '오전 반차' : '오후 반차'}`}
                       >
                         {leave.memberName}
                       </div>

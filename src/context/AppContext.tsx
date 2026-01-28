@@ -1,16 +1,20 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Group, Member, LeaveEntry } from '../types';
+import { supabase } from '../lib/supabase';
+import { Group, Member, LeaveEntry, DbGroup, DbMember, DbLeave } from '../types';
 
 interface AppContextType {
   group: Group | null;
-  setGroup: (group: Group | null) => void;
-  addMember: (member: Omit<Member, 'id'>) => void;
-  updateMember: (id: string, updates: Partial<Member>) => void;
-  deleteMember: (id: string) => void;
-  addLeave: (leave: Omit<LeaveEntry, 'id'>) => void;
-  deleteLeave: (id: string) => void;
+  loading: boolean;
+  loginWithCode: (code: string) => Promise<boolean>;
+  createGroup: () => Promise<string | null>;
+  addMember: (name: string, joinDate: string) => Promise<void>;
+  updateMember: (id: string, updates: { name?: string; joinDate?: string }) => Promise<void>;
+  deleteMember: (id: string) => Promise<void>;
+  addLeave: (memberId: string, date: string, type: 'full' | 'am' | 'pm') => Promise<void>;
+  deleteLeave: (id: string) => Promise<void>;
   getMemberLeaves: (memberId: string) => LeaveEntry[];
   logout: () => void;
+  refreshData: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -28,115 +32,263 @@ interface AppProviderProps {
 }
 
 export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
-  const [group, setGroupState] = useState<Group | null>(() => {
-    const stored = localStorage.getItem('annualLeaveGroup');
-    return stored ? JSON.parse(stored) : null;
-  });
+  const [group, setGroup] = useState<Group | null>(null);
+  const [loading, setLoading] = useState(true);
 
+  // 앱 시작 시 저장된 그룹 코드로 자동 로그인
   useEffect(() => {
-    if (group) {
-      localStorage.setItem('annualLeaveGroup', JSON.stringify(group));
+    const savedGroupCode = localStorage.getItem('groupCode');
+    if (savedGroupCode) {
+      loginWithCode(savedGroupCode).finally(() => setLoading(false));
     } else {
-      localStorage.removeItem('annualLeaveGroup');
+      setLoading(false);
     }
-  }, [group]);
+  }, []);
 
-  const setGroup = (newGroup: Group | null) => {
-    setGroupState(newGroup);
-  };
-
-  const addMember = (member: Omit<Member, 'id'>) => {
+  // 그룹 데이터 새로고침
+  const refreshData = async () => {
     if (!group) return;
     
-    const newMember: Member = {
-      ...member,
-      id: `member-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    const { data: members } = await supabase
+      .from('members')
+      .select('*')
+      .eq('group_id', group.id);
+
+    const { data: leaves } = await supabase
+      .from('leaves')
+      .select('*')
+      .in('member_id', members?.map(m => m.id) || []);
+
+    setGroup({
+      ...group,
+      members: (members || []).map(m => ({
+        id: m.id,
+        name: m.name,
+        joinDate: m.join_date,
+      })),
+      leaves: (leaves || []).map(l => ({
+        id: l.id,
+        memberId: l.member_id,
+        date: l.date,
+        type: l.type,
+      })),
+    });
+  };
+
+  // 그룹 코드로 로그인
+  const loginWithCode = async (code: string): Promise<boolean> => {
+    const { data: groupData, error } = await supabase
+      .from('groups')
+      .select('*')
+      .eq('code', code)
+      .single();
+
+    if (error || !groupData) {
+      return false;
+    }
+
+    const { data: members } = await supabase
+      .from('members')
+      .select('*')
+      .eq('group_id', groupData.id);
+
+    const memberIds = members?.map(m => m.id) || [];
+    
+    let leaves: DbLeave[] = [];
+    if (memberIds.length > 0) {
+      const { data: leavesData } = await supabase
+        .from('leaves')
+        .select('*')
+        .in('member_id', memberIds);
+      leaves = leavesData || [];
+    }
+
+    const newGroup: Group = {
+      id: groupData.id,
+      code: groupData.code,
+      members: (members || []).map(m => ({
+        id: m.id,
+        name: m.name,
+        joinDate: m.join_date,
+      })),
+      leaves: leaves.map(l => ({
+        id: l.id,
+        memberId: l.member_id,
+        date: l.date,
+        type: l.type,
+      })),
     };
 
-    setGroupState({
+    setGroup(newGroup);
+    localStorage.setItem('groupCode', code);
+    return true;
+  };
+
+  // 새 그룹 생성
+  const createGroup = async (): Promise<string | null> => {
+    const code = `GROUP-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
+    
+    const { data, error } = await supabase
+      .from('groups')
+      .insert({ code })
+      .select()
+      .single();
+
+    if (error || !data) {
+      console.error('그룹 생성 실패:', error);
+      return null;
+    }
+
+    return code;
+  };
+
+  // 멤버 추가
+  const addMember = async (name: string, joinDate: string) => {
+    if (!group) return;
+
+    const { data, error } = await supabase
+      .from('members')
+      .insert({
+        group_id: group.id,
+        name,
+        join_date: joinDate,
+      })
+      .select()
+      .single();
+
+    if (error || !data) {
+      console.error('멤버 추가 실패:', error);
+      return;
+    }
+
+    setGroup({
       ...group,
-      members: [...group.members, newMember],
+      members: [...group.members, {
+        id: data.id,
+        name: data.name,
+        joinDate: data.join_date,
+      }],
     });
   };
 
-  const updateMember = (id: string, updates: Partial<Member>) => {
+  // 멤버 수정
+  const updateMember = async (id: string, updates: { name?: string; joinDate?: string }) => {
     if (!group) return;
 
-    setGroupState({
+    const dbUpdates: any = {};
+    if (updates.name) dbUpdates.name = updates.name;
+    if (updates.joinDate) dbUpdates.join_date = updates.joinDate;
+
+    const { error } = await supabase
+      .from('members')
+      .update(dbUpdates)
+      .eq('id', id);
+
+    if (error) {
+      console.error('멤버 수정 실패:', error);
+      return;
+    }
+
+    setGroup({
       ...group,
-      members: group.members.map(m => m.id === id ? { ...m, ...updates } : m),
+      members: group.members.map(m =>
+        m.id === id
+          ? { ...m, ...updates }
+          : m
+      ),
     });
   };
 
-  const deleteMember = (id: string) => {
+  // 멤버 삭제
+  const deleteMember = async (id: string) => {
     if (!group) return;
 
-    setGroupState({
+    const { error } = await supabase
+      .from('members')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('멤버 삭제 실패:', error);
+      return;
+    }
+
+    setGroup({
       ...group,
       members: group.members.filter(m => m.id !== id),
       leaves: group.leaves.filter(l => l.memberId !== id),
     });
   };
 
-  const addLeave = (leave: Omit<LeaveEntry, 'id'>) => {
+  // 연차 추가
+  const addLeave = async (memberId: string, date: string, type: 'full' | 'am' | 'pm') => {
     if (!group) return;
 
-    const newLeave: LeaveEntry = {
-      ...leave,
-      id: `leave-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    };
+    const { data, error } = await supabase
+      .from('leaves')
+      .insert({
+        member_id: memberId,
+        date,
+        type,
+      })
+      .select()
+      .single();
 
-    const member = group.members.find(m => m.id === leave.memberId);
-    if (!member) return;
+    if (error || !data) {
+      console.error('연차 추가 실패:', error);
+      return;
+    }
 
-    const leaveValue = leave.type === 'full' ? 1 : 0.5;
-    const updatedMembers = group.members.map(m =>
-      m.id === leave.memberId
-        ? { ...m, usedLeave: m.usedLeave + leaveValue }
-        : m
-    );
-
-    setGroupState({
+    setGroup({
       ...group,
-      members: updatedMembers,
-      leaves: [...group.leaves, newLeave],
+      leaves: [...group.leaves, {
+        id: data.id,
+        memberId: data.member_id,
+        date: data.date,
+        type: data.type,
+      }],
     });
   };
 
-  const deleteLeave = (id: string) => {
+  // 연차 삭제
+  const deleteLeave = async (id: string) => {
     if (!group) return;
 
-    const leave = group.leaves.find(l => l.id === id);
-    if (!leave) return;
+    const { error } = await supabase
+      .from('leaves')
+      .delete()
+      .eq('id', id);
 
-    const leaveValue = leave.type === 'full' ? 1 : 0.5;
-    const updatedMembers = group.members.map(m =>
-      m.id === leave.memberId
-        ? { ...m, usedLeave: Math.max(0, m.usedLeave - leaveValue) }
-        : m
-    );
+    if (error) {
+      console.error('연차 삭제 실패:', error);
+      return;
+    }
 
-    setGroupState({
+    setGroup({
       ...group,
-      members: updatedMembers,
       leaves: group.leaves.filter(l => l.id !== id),
     });
   };
 
+  // 특정 멤버의 연차 목록
   const getMemberLeaves = (memberId: string): LeaveEntry[] => {
     if (!group) return [];
     return group.leaves.filter(l => l.memberId === memberId);
   };
 
+  // 로그아웃
   const logout = () => {
-    setGroupState(null);
+    setGroup(null);
+    localStorage.removeItem('groupCode');
   };
 
   return (
     <AppContext.Provider
       value={{
         group,
-        setGroup,
+        loading,
+        loginWithCode,
+        createGroup,
         addMember,
         updateMember,
         deleteMember,
@@ -144,6 +296,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         deleteLeave,
         getMemberLeaves,
         logout,
+        refreshData,
       }}
     >
       {children}

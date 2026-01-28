@@ -5,8 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useApp } from '../context/AppContext';
-import { LeaveType } from '../types';
 import { Toast } from './Toast';
+import { LeaveType } from '../types';
 
 interface AddLeaveModalProps {
   memberId: string;
@@ -14,13 +14,10 @@ interface AddLeaveModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export const AddLeaveModal: React.FC<AddLeaveModalProps> = ({
-  memberId,
-  open,
-  onOpenChange,
-}) => {
+export const AddLeaveModal: React.FC<AddLeaveModalProps> = ({ memberId, open, onOpenChange }) => {
   const [date, setDate] = useState('');
-  const [leaveType, setLeaveType] = useState<LeaveType>('full');
+  const [type, setType] = useState<LeaveType>('full');
+  const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState<{ open: boolean; title: string; variant: 'success' | 'error' }>({
     open: false,
     title: '',
@@ -28,22 +25,20 @@ export const AddLeaveModal: React.FC<AddLeaveModalProps> = ({
   });
   const { addLeave } = useApp();
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!date) {
       setToast({ open: true, title: '날짜를 선택해주세요', variant: 'error' });
       return;
     }
 
-    addLeave({
-      memberId,
-      date,
-      type: leaveType,
-    });
+    setIsLoading(true);
+    await addLeave(memberId, date, type);
+    setIsLoading(false);
 
     setToast({ open: true, title: '연차가 추가되었습니다', variant: 'success' });
     setDate('');
-    setLeaveType('full');
-    setTimeout(() => onOpenChange(false), 500);
+    setType('full');
+    onOpenChange(false);
   };
 
   return (
@@ -53,59 +48,52 @@ export const AddLeaveModal: React.FC<AddLeaveModalProps> = ({
           <DialogHeader>
             <DialogTitle className="text-h3 text-foreground">연차 추가</DialogTitle>
           </DialogHeader>
-          <div className="space-y-6 py-4">
+          <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="leaveDate" className="text-body text-foreground">
+              <Label htmlFor="date" className="text-body text-foreground">
                 날짜
               </Label>
               <Input
-                id="leaveDate"
+                id="date"
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 className="h-11"
+                disabled={isLoading}
               />
             </div>
-
-            <div className="space-y-3">
-              <Label className="text-body text-foreground">연차 종류</Label>
-              <RadioGroup value={leaveType} onValueChange={(value) => setLeaveType(value as LeaveType)}>
-                <div className="flex items-center space-x-3 bg-secondary rounded-md p-3">
-                  <RadioGroupItem value="full" id="full" />
-                  <Label htmlFor="full" className="text-body text-secondary-foreground cursor-pointer flex-1">
-                    연차 (1일)
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-3 bg-secondary rounded-md p-3">
-                  <RadioGroupItem value="am" id="am" />
-                  <Label htmlFor="am" className="text-body text-secondary-foreground cursor-pointer flex-1">
-                    오전 반차 (0.5일)
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-3 bg-secondary rounded-md p-3">
-                  <RadioGroupItem value="pm" id="pm" />
-                  <Label htmlFor="pm" className="text-body text-secondary-foreground cursor-pointer flex-1">
-                    오후 반차 (0.5일)
-                  </Label>
+            <div className="space-y-2">
+              <Label className="text-body text-foreground">유형</Label>
+              <RadioGroup value={type} onValueChange={(value) => setType(value as LeaveType)}>
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="full" id="full" />
+                    <Label htmlFor="full" className="text-body-sm text-foreground cursor-pointer">
+                      연차 (1일)
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="am" id="am" />
+                    <Label htmlFor="am" className="text-body-sm text-foreground cursor-pointer">
+                      오전반차
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="pm" id="pm" />
+                    <Label htmlFor="pm" className="text-body-sm text-foreground cursor-pointer">
+                      오후반차
+                    </Label>
+                  </div>
                 </div>
               </RadioGroup>
             </div>
-
-            <div className="flex gap-3">
-              <Button
-                onClick={handleSubmit}
-                className="flex-1 h-11 bg-primary text-primary-foreground font-normal hover:bg-primary-hover"
-              >
-                추가
-              </Button>
-              <Button
-                onClick={() => onOpenChange(false)}
-                variant="ghost"
-                className="flex-1 h-11 bg-transparent text-foreground font-normal hover:bg-secondary hover:text-secondary-foreground"
-              >
-                취소
-              </Button>
-            </div>
+            <Button
+              onClick={handleSubmit}
+              disabled={isLoading}
+              className="w-full h-11 bg-primary text-primary-foreground font-normal hover:bg-primary-hover"
+            >
+              {isLoading ? '추가 중...' : '추가하기'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

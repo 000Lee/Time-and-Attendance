@@ -1,0 +1,78 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-border: 210 12% 85%;
+    --color-input: 210 14% 85%;
+    --color-ring: 222 87% 70%;
+    --color-background: 210 20% 98%;
+    --color-foreground: 210 15% 20%;
+    
+    --color-primary: 222 87% 60%;
+    --color-primary-foreground: 0 0% 100%;
+    --color-primary-hover: 222 87% 50%;
+    --color-primary-active: 222 87% 45%;
+    
+    --color-secondary: 222 87% 95%;
+    --color-secondary-foreground: 222 87% 35%;
+    --color-secondary-hover: 222 87% 90%;
+    --color-secondary-active: 222 87% 85%;
+    
+    --color-tertiary: 0 0% 96%;
+    --color-tertiary-foreground: 222 10% 25%;
+    
+    --color-accent: 50 100% 60%;
+    --color-accent-foreground: 50 80% 20%;
+    
+    --color-success: 142 72% 35%;
+    --color-success-foreground: 0 0% 100%;
+    
+    --color-warning: 38 90% 55%;
+    --color-warning-foreground: 33 70% 20%;
+    
+    --color-error: 0 83% 50%;
+    --color-error-foreground: 0 0% 100%;
+    
+    --color-info: 222 87% 60%;
+    --color-info-foreground: 0 0% 100%;
+    
+    --color-card: 0 0% 100%;
+    --color-card-foreground: 210 15% 20%;
+    
+    --color-muted: 210 20% 96%;
+    --color-muted-foreground: 210 10% 60%;
+    
+    --color-destructive: 0 83% 50%;
+    --color-destructive-foreground: 0 0% 100%;
+    
+    --font-sans: "DM Sans", sans-serif;
+    --font-body: "Inter", sans-serif;
+    --font-mono: "IBM Plex Mono", monospace;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body {
+    @apply bg-background text-foreground font-body;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-sans text-foreground;
+    letter-spacing: -0.025em;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}

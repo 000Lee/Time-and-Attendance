@@ -4,6 +4,7 @@ import { AppProvider, useApp } from './context/AppContext';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
 import { Members } from './pages/Members';
+import { HelpButton } from './components/HelpButton';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { group } = useApp();
@@ -47,6 +48,7 @@ const App: React.FC = () => {
     <BrowserRouter>
       <AppProvider>
         <AppRoutes />
+        <HelpButton />
       </AppProvider>
     </BrowserRouter>
   );

@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
-import { Group, Member, LeaveEntry, DbGroup, DbMember, DbLeave } from '../types';
+import { Group, Member, LeaveEntry, LeaveAdjustment, DbGroup, DbMember, DbLeave, DbLeaveAdjustment } from '../types';
 
 interface AppContextType {
   group: Group | null;
   loading: boolean;
+  leaveAdjustments: LeaveAdjustment[];
   loginWithCode: (code: string) => Promise<boolean>;
   createGroup: () => Promise<string | null>;
   addMember: (name: string, joinDate: string) => Promise<void>;
@@ -13,6 +14,8 @@ interface AppContextType {
   addLeave: (memberId: string, date: string, type: 'full' | 'am' | 'pm') => Promise<void>;
   deleteLeave: (id: string) => Promise<void>;
   getMemberLeaves: (memberId: string) => LeaveEntry[];
+  getLeaveAdjustment: (memberId: string, year: number) => number;
+  setLeaveAdjustment: (memberId: string, year: number, adjustment: number) => Promise<void>;
   logout: () => void;
   refreshData: () => Promise<void>;
 }
@@ -34,6 +37,7 @@ interface AppProviderProps {
 export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [group, setGroup] = useState<Group | null>(null);
   const [loading, setLoading] = useState(true);
+  const [leaveAdjustments, setLeaveAdjustments] = useState<LeaveAdjustment[]>([]);
 
   // 앱 시작 시 저장된 그룹 코드로 자동 로그인
   useEffect(() => {
@@ -48,16 +52,23 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // 그룹 데이터 새로고침
   const refreshData = async () => {
     if (!group) return;
-    
+
     const { data: members } = await supabase
       .from('members')
       .select('*')
       .eq('group_id', group.id);
 
+    const memberIds = members?.map(m => m.id) || [];
+
     const { data: leaves } = await supabase
       .from('leaves')
       .select('*')
-      .in('member_id', members?.map(m => m.id) || []);
+      .in('member_id', memberIds);
+
+    const { data: adjustments } = await supabase
+      .from('member_leave_adjustments')
+      .select('*')
+      .in('member_id', memberIds);
 
     setGroup({
       ...group,
@@ -73,6 +84,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         type: l.type,
       })),
     });
+
+    setLeaveAdjustments((adjustments || []).map((a: DbLeaveAdjustment) => ({
+      id: a.id,
+      memberId: a.member_id,
+      year: a.year,
+      adjustment: a.adjustment,
+    })));
   };
 
   // 그룹 코드로 로그인
@@ -93,15 +111,29 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       .eq('group_id', groupData.id);
 
     const memberIds = members?.map(m => m.id) || [];
-    
+
     let leaves: DbLeave[] = [];
+    let adjustments: DbLeaveAdjustment[] = [];
     if (memberIds.length > 0) {
       const { data: leavesData } = await supabase
         .from('leaves')
         .select('*')
         .in('member_id', memberIds);
       leaves = leavesData || [];
+
+      const { data: adjustmentsData } = await supabase
+        .from('member_leave_adjustments')
+        .select('*')
+        .in('member_id', memberIds);
+      adjustments = adjustmentsData || [];
     }
+
+    setLeaveAdjustments(adjustments.map(a => ({
+      id: a.id,
+      memberId: a.member_id,
+      year: a.year,
+      adjustment: a.adjustment,
+    })));
 
     const newGroup: Group = {
       id: groupData.id,
@@ -276,9 +308,74 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     return group.leaves.filter(l => l.memberId === memberId);
   };
 
+  // 특정 멤버의 특정 년차 조정값 조회
+  const getLeaveAdjustment = (memberId: string, year: number): number => {
+    const adjustment = leaveAdjustments.find(
+      a => a.memberId === memberId && a.year === year
+    );
+    return adjustment?.adjustment ?? 0;
+  };
+
+  // 조정값 설정/수정
+  const setLeaveAdjustment = async (memberId: string, year: number, adjustment: number) => {
+    const existing = leaveAdjustments.find(
+      a => a.memberId === memberId && a.year === year
+    );
+
+    if (adjustment === 0) {
+      // 조정값이 0이면 삭제
+      if (existing) {
+        await supabase
+          .from('member_leave_adjustments')
+          .delete()
+          .eq('id', existing.id);
+
+        setLeaveAdjustments(leaveAdjustments.filter(a => a.id !== existing.id));
+      }
+      return;
+    }
+
+    if (existing) {
+      // 업데이트
+      const { error } = await supabase
+        .from('member_leave_adjustments')
+        .update({ adjustment })
+        .eq('id', existing.id);
+
+      if (error) {
+        console.error('조정값 수정 실패:', error);
+        return;
+      }
+
+      setLeaveAdjustments(leaveAdjustments.map(a =>
+        a.id === existing.id ? { ...a, adjustment } : a
+      ));
+    } else {
+      // 새로 생성
+      const { data, error } = await supabase
+        .from('member_leave_adjustments')
+        .insert({ member_id: memberId, year, adjustment })
+        .select()
+        .single();
+
+      if (error || !data) {
+        console.error('조정값 추가 실패:', error);
+        return;
+      }
+
+      setLeaveAdjustments([...leaveAdjustments, {
+        id: data.id,
+        memberId: data.member_id,
+        year: data.year,
+        adjustment: data.adjustment,
+      }]);
+    }
+  };
+
   // 로그아웃
   const logout = () => {
     setGroup(null);
+    setLeaveAdjustments([]);
     localStorage.removeItem('groupCode');
   };
 
@@ -287,6 +384,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       value={{
         group,
         loading,
+        leaveAdjustments,
         loginWithCode,
         createGroup,
         addMember,
@@ -295,6 +393,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         addLeave,
         deleteLeave,
         getMemberLeaves,
+        getLeaveAdjustment,
+        setLeaveAdjustment,
         logout,
         refreshData,
       }}

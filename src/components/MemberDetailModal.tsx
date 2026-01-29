@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -37,11 +37,34 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
     title: '',
     variant: 'success',
   });
-  const { updateMember, deleteMember, getMemberLeaves, deleteLeave } = useApp();
+  const { updateMember, deleteMember, getMemberLeaves, deleteLeave, getLeaveAdjustment, setLeaveAdjustment } = useApp();
 
   // 현재 보고 있는 연차 주기
   const currentPeriod = getLeavePeriodByOffset(member.joinDate, periodOffset);
-  const totalLeave = calculateTotalLeave(member.joinDate, currentPeriod.year);
+  const baseLeave = calculateTotalLeave(member.joinDate, currentPeriod.year);
+  const adjustment = getLeaveAdjustment(member.id, currentPeriod.year);
+  const totalLeave = baseLeave + adjustment;
+
+  // 조정값 편집 상태
+  const [isEditingAdjustment, setIsEditingAdjustment] = useState(false);
+  const [editedAdjustment, setEditedAdjustment] = useState(adjustment.toString());
+
+  // 년차가 변경되면 조정값 입력 초기화
+  useEffect(() => {
+    setEditedAdjustment(adjustment.toString());
+    setIsEditingAdjustment(false);
+  }, [periodOffset, adjustment]);
+
+  const handleSaveAdjustment = async () => {
+    const newAdjustment = parseInt(editedAdjustment, 10);
+    if (isNaN(newAdjustment)) {
+      setToast({ open: true, title: '올바른 숫자를 입력해주세요', variant: 'error' });
+      return;
+    }
+    await setLeaveAdjustment(member.id, currentPeriod.year, newAdjustment);
+    setIsEditingAdjustment(false);
+    setToast({ open: true, title: '조정값이 저장되었습니다', variant: 'success' });
+  };
   
   // 해당 주기의 연차만 필터링
   const allLeaves = getMemberLeaves(member.id);
@@ -180,7 +203,7 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-3 gap-4 mb-4">
                 <div className="bg-card rounded-md p-4 text-center border border-border">
                   <p className="text-caption text-muted-foreground mb-1">총 연차</p>
                   <p className="text-h3 font-sans text-foreground">{totalLeave}</p>
@@ -192,6 +215,64 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                 <div className="bg-card rounded-md p-4 text-center border border-border">
                   <p className="text-caption text-muted-foreground mb-1">남음</p>
                   <p className="text-h3 font-sans text-primary">{remainingLeave}</p>
+                </div>
+              </div>
+
+              {/* 연차 조정 섹션 */}
+              <div className="bg-card rounded-md p-3 border border-border">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4 text-body-sm">
+                    <span className="text-muted-foreground">기본 {baseLeave}일</span>
+                    <span className="text-muted-foreground">+</span>
+                    {isEditingAdjustment ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">조정</span>
+                        <Input
+                          type="number"
+                          value={editedAdjustment}
+                          onChange={(e) => setEditedAdjustment(e.target.value)}
+                          className="h-8 w-16 text-center"
+                        />
+                        <span className="text-muted-foreground">일</span>
+                        <Button
+                          onClick={handleSaveAdjustment}
+                          size="sm"
+                          className="h-8 px-2 bg-primary text-primary-foreground font-normal hover:bg-primary-hover"
+                        >
+                          저장
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            setIsEditingAdjustment(false);
+                            setEditedAdjustment(adjustment.toString());
+                          }}
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2"
+                        >
+                          취소
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <span className={adjustment !== 0 ? 'text-primary font-medium' : 'text-muted-foreground'}>
+                          조정 {adjustment >= 0 ? '+' : ''}{adjustment}일
+                        </span>
+                        <span className="text-muted-foreground">=</span>
+                        <span className="text-foreground font-medium">총 {totalLeave}일</span>
+                      </>
+                    )}
+                  </div>
+                  {!isEditingAdjustment && (
+                    <Button
+                      onClick={() => setIsEditingAdjustment(true)}
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-muted-foreground hover:text-foreground"
+                    >
+                      조정
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

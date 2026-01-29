@@ -43,3 +43,20 @@ export interface Group {
 }
 
 export type LeaveType = 'full' | 'am' | 'pm';
+
+// DB 테이블 타입
+export interface DbLeaveAdjustment {
+  id: string;
+  member_id: string;
+  year: number;
+  adjustment: number;
+  created_at: string;
+}
+
+// 프론트엔드용 타입
+export interface LeaveAdjustment {
+  id: string;
+  memberId: string;
+  year: number;
+  adjustment: number;
+}

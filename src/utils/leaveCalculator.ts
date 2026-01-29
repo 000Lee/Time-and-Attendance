@@ -75,8 +75,11 @@ export function calculateTotalLeave(joinDate: string, periodYear: number): numbe
     return 15;
   }
   
-  // 15개 + 2년마다 1개 추가 (최대 25개)
-  const additionalLeave = Math.floor(workingYears / 2);
+  // 근로기준법 제60조 4항: 3년 이상 근속 시 2년마다 1일 추가 (최대 25개)
+  if (workingYears < 3) {
+    return 15;
+  }
+  const additionalLeave = Math.floor((workingYears - 1) / 2);
   return Math.min(15 + additionalLeave, 25);
 }
 

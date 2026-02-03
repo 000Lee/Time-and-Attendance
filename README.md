@@ -173,26 +173,25 @@ export function calculateTotalLeave(joinDate: string, periodYear: number): numbe
 ### ERD
 
 ```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│    groups    │     │   members    │     │    leaves    │
-├──────────────┤     ├──────────────┤     ├──────────────┤
-│ id (PK)      │────<│ id (PK)      │────<│ id (PK)      │
-│ code         │     │ group_id(FK) │     │ member_id(FK)│
-│ created_at   │     │ name         │     │ date         │
-└──────────────┘     │ join_date    │     │ type         │
-                     │ created_at   │     │ created_at   │
-                     └──────────────┘     └──────────────┘
-                            │
-                            │
-                     ┌──────────────────────┐
-                     │member_leave_adjustments│
-                     ├──────────────────────┤
-                     │ id (PK)              │
-                     │ member_id (FK)       │
-                     │ year                 │
-                     │ adjustment           │
-                     │ created_at           │
-                     └──────────────────────┘
+┌──────────────┐      ┌──────────────┐      ┌──────────────┐
+│    groups    │      │   members    │      │    leaves    │
+├──────────────┤      ├──────────────┤      ├──────────────┤
+│ id (PK)      │─────<│ id (PK)      │─────<│ id (PK)      │
+│ code         │      │ group_id(FK) │      │ member_id(FK)│
+│ created_at   │      │ name         │      │ date         │
+└──────────────┘      │ join_date    │      │ type         │
+                      │ created_at   │      │ created_at   │
+                      └──────────────┘      └──────────────┘
+                             │
+                             └─────<┌─────────────────────────┐
+                                    │ member_leave_adjustments │
+                                    ├─────────────────────────┤
+                                    │ id (PK)                 │
+                                    │ member_id (FK)          │
+                                    │ year                    │
+                                    │ adjustment              │
+                                    │ created_at              │
+                                    └─────────────────────────┘
 ```
 
 ### 테이블 설명

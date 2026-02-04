@@ -8,7 +8,7 @@
 
 ## 🔗 배포 링크
 
-**[Live Demo](https://time-and-attendance-lyart.vercel.app/)**
+**[Live Demo](https://time-and-attendance-seven.vercel.app/)**
 
 <br>
 

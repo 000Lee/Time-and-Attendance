@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, addMonths, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Navbar } from '../components/Navbar';
 import { useApp } from '../context/AppContext';
@@ -14,6 +14,7 @@ interface DayLeave {
 
 export const Home: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const { group } = useApp();
 
   const monthStart = startOfMonth(currentDate);
@@ -103,19 +104,27 @@ export const Home: React.FC = () => {
               const dateStr = format(day, 'yyyy-MM-dd');
               const dayLeaves = leavesMap.get(dateStr) || [];
               const isToday = format(new Date(), 'yyyy-MM-dd') === dateStr;
+              const visibleLeaves = dayLeaves.slice(0, 2);
+              const extraCount = dayLeaves.length - 2;
 
               return (
                 <div
                   key={dateStr}
-                  className={`min-h-24 border border-border rounded-md p-2 transition-colors duration-200 ${
+                  onClick={() => dayLeaves.length > 0 && setSelectedDate(dateStr)}
+                  className={`min-h-24 border border-border rounded-md p-2 transition-colors duration-200 relative ${
                     isToday ? 'bg-primary/5 border-primary' : 'bg-card hover:bg-secondary/30'
-                  }`}
+                  } ${dayLeaves.length > 0 ? 'cursor-pointer' : ''}`}
                 >
                   <div className={`text-body-sm mb-2 ${isToday ? 'text-primary font-medium' : 'text-foreground'}`}>
                     {format(day, 'd')}
                   </div>
+                  {extraCount > 0 && (
+                    <span className="absolute top-2 right-2 text-caption font-medium text-primary">
+                      +{extraCount}
+                    </span>
+                  )}
                   <div className="space-y-1">
-                    {dayLeaves.map((leave, idx) => (
+                    {visibleLeaves.map((leave, idx) => (
                       <div
                         key={`${leave.memberId}-${idx}`}
                         className={`text-caption px-2 py-1 rounded truncate ${
@@ -136,6 +145,39 @@ export const Home: React.FC = () => {
             })}
           </div>
         </div>
+        {selectedDate && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setSelectedDate(null)}>
+            <div className="bg-card rounded-lg shadow-lg border border-border w-full max-w-sm mx-4 p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-h4 font-medium text-foreground">
+                  {format(new Date(selectedDate + 'T00:00:00'), 'M월 d일 (EEE)', { locale: ko })}
+                </h3>
+                <button onClick={() => setSelectedDate(null)} className="text-muted-foreground hover:text-foreground">
+                  <X className="w-5 h-5" strokeWidth={1.5} />
+                </button>
+              </div>
+              <div className="space-y-2">
+                {(leavesMap.get(selectedDate) || []).map((leave, idx) => (
+                  <div
+                    key={`${leave.memberId}-${idx}`}
+                    className="flex items-center justify-between py-2 px-3 rounded-md bg-secondary/50"
+                  >
+                    <span className="text-body font-medium text-foreground">{leave.memberName}</span>
+                    <span className={`text-caption px-2 py-1 rounded ${
+                      leave.type === 'full'
+                        ? 'bg-primary text-primary-foreground'
+                        : leave.type === 'am'
+                        ? 'bg-amber-400 text-amber-900'
+                        : 'bg-violet-300 text-violet-800'
+                    }`}>
+                      {leave.type === 'full' ? '연차' : leave.type === 'am' ? '오전 반차' : '오후 반차'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

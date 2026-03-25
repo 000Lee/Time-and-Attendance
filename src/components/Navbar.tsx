@@ -7,7 +7,7 @@ import { useApp } from '../context/AppContext';
 export const Navbar: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
-  const { logout } = useApp();
+  const { logout, group } = useApp();
 
   const handleLogout = () => {
     logout();
@@ -50,7 +50,12 @@ export const Navbar: React.FC = () => {
             </div>
           </div>
 
-          <div className="hidden md:block">
+          <div className="hidden md:flex items-center gap-2">
+            {group && (
+              <span className="text-sm font-medium text-blue-500">
+                {group.code}
+              </span>
+            )}
             <Button
               variant="ghost"
               onClick={handleLogout}
@@ -97,6 +102,11 @@ export const Navbar: React.FC = () => {
                 멤버관리
               </Button>
             </Link>
+            {group && (
+              <div className="px-4 py-2 text-sm font-medium text-blue-500">
+                {group.code}
+              </div>
+            )}
             <Button
               variant="ghost"
               onClick={handleLogout}

@@ -47,6 +47,16 @@ export const Navbar: React.FC = () => {
                   멤버관리
                 </Button>
               </Link>
+              <Link to="/export">
+                <Button
+                  variant="ghost"
+                  className={`h-11 px-4 bg-transparent text-foreground font-normal hover:bg-secondary hover:text-secondary-foreground ${
+                    isActive('/export') ? 'border-b-[3px] border-primary rounded-none' : ''
+                  }`}
+                >
+                  엑셀
+                </Button>
+              </Link>
             </div>
           </div>
 
@@ -100,6 +110,16 @@ export const Navbar: React.FC = () => {
                 }`}
               >
                 멤버관리
+              </Button>
+            </Link>
+            <Link to="/export" onClick={() => setMobileMenuOpen(false)}>
+              <Button
+                variant="ghost"
+                className={`w-full justify-start h-11 bg-transparent text-foreground font-normal hover:bg-secondary hover:text-secondary-foreground ${
+                  isActive('/export') ? 'bg-secondary text-secondary-foreground' : ''
+                }`}
+              >
+                엑셀
               </Button>
             </Link>
             {group && (

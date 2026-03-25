@@ -4,6 +4,7 @@ import { AppProvider, useApp } from './context/AppContext';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
 import { Members } from './pages/Members';
+import { Export } from './pages/Export';
 import { HelpButton } from './components/HelpButton';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -38,6 +39,14 @@ const AppRoutes: React.FC = () => {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/export"
+        element={
+          <ProtectedRoute>
+            <Export />
+          </ProtectedRoute>
+        }
+      />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
@@ -45,7 +54,7 @@ const AppRoutes: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AppProvider>
         <AppRoutes />
         <HelpButton />

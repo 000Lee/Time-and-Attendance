@@ -9,8 +9,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Supabase REST API에 간단한 요청을 보내서 프로젝트를 활성 상태로 유지
-    const response = await fetch(`${supabaseUrl}/rest/v1/`, {
+    // 실제 테이블을 조회해서 DB까지 요청이 닿도록 함 (프로젝트 활성 상태 유지)
+    // 주의: /rest/v1/ 루트는 service_role 키만 허용하므로 anon 키로는 401이 나고
+    // DB에 도달하지 않아 활동으로 집계되지 않는다
+    const response = await fetch(`${supabaseUrl}/rest/v1/groups?select=id&limit=1`, {
       method: 'GET',
       headers: {
         apikey: supabaseKey,
